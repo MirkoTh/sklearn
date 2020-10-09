@@ -46,9 +46,8 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
             The input samples.
         Returns
         -------
-        X_transformed : array, shape (n_samples, n_features)
-            The array containing the element-wise square roots of the values
-            in ``X``.
+        X_constrained_ : array, shape (n_samples, n_features)
+            The array only containing the to be kept features in ``X``.
         """
         # Check is fit had been called
         check_is_fitted(self, 'n_features_')
@@ -61,9 +60,24 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
         if X.shape[1] != self.n_features_:
             raise ValueError('Shape of input is different from what was seen'
                              'in `fit`')
-        self.X_constrained_ = np.delete(X, self.features_drop_idx_, axis = 1)
+        X_constrained_ = np.delete(X, self.features_drop_idx_, axis = 1)
             
-        return self
+        return X_constrained_
+    
+    def fit_transform(self, X):
+        """ Fit and transform the CorrelationTransformer
+        Parameters
+        ----------
+        X : {array-like, sparse-matrix}, shape (n_samples, n_features)
+            The input samples.
+        Returns
+        -------
+        X_transformed_ : array, shape (n_samples, n_features - len(self.feats_drop_idx_))
+            The array only containing the to be kept features in ``X``.
+        """
+        self.fit(X)
+        X_constrained_ = self.transform(X)
+        return X_constrained_
     
     def corr_mat_lower(self, df):
         """Correlation matrix of a pd.DataFrame with values in lower triangle set to 0.
