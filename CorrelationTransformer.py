@@ -10,7 +10,7 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
     n_features_ : int
         The number of features of the data passed to :meth:`fit`.
     """
-    def __init__(self, thx_excl=.95):
+    def __init__(self, thx_excl = .95):
         self.thx_excl = thx_excl
 
     def fit(self, X, y=None):
@@ -28,13 +28,13 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
             Returns self.
         """
         X = check_array(X, accept_sparse=False)
-
+        
         self.n_features_ = X.shape[1]
         self.n_features_in_ = X.shape[1]
-
-        self.X_corr = self.corr_mat_lower(X)
-        self.X_constrained = self.drop_correlated_features(X)
-
+        
+        self.X_corr_ = self.corr_mat_lower(X)
+        self.features_drop_idx_, self.features_keep_idx_ = self.drop_correlated_features(X)
+        
         # Return the transformer
         return self
 
@@ -55,17 +55,16 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
 
         # Input validation
         X = check_array(X, accept_sparse=True)
-
+        
         # Check that the input is of the same shape as the one passed
         # during fit.
         if X.shape[1] != self.n_features_:
-            raise ValueError(
-                'Shape of input is different from what was seen'
-                'in `fit`'
-            )
-
-        return
-
+            raise ValueError('Shape of input is different from what was seen'
+                             'in `fit`')
+        self.X_constrained_ = np.delete(X, self.features_drop_idx_, axis = 1)
+            
+        return self
+    
     def corr_mat_lower(self, df):
         """Correlation matrix of a pd.DataFrame with values in lower triangle set to 0.
         Parameters
@@ -78,18 +77,16 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
             The pd.DataFrame returning the pairwise Pearson correlations between columns in ``df``.
         """
         self.assert_df_notna(df)
-
-        arr_corr = np.corrcoef(
-            df, rowvar=False
-        )     #.corr(method = "pearson", min_periods=100)
-        array_mask = np.array(arr_corr, dtype=bool)
-        array_triu = np.triu(array_mask, k=0)
+        
+        arr_corr = np.corrcoef(df, rowvar = False)
+        array_mask = np.array(arr_corr, dtype = bool)
+        array_triu = np.triu(array_mask, k = 0)
         array_corr[array_triu] = 0
         return pd.DataFrame(array_corr)
-
+    
     def assert_df_notna(self, df):
         assert np.isnan(df).sum().sum() == 0, "nas cannot be handled"
-
+        
     def drop_correlated_features(self, df):
         """Drop features correlated above thx from df
         Parameters
@@ -103,18 +100,16 @@ class CorrelationTransformer(TransformerMixin, BaseEstimator):
             The pd.DataFrame returning the constrained ``df``.
         """
         # input check
-        iterable_test = map(self.assert_df_notna, [df, self.X_corr])
+        iterable_test = map(self.assert_df_notna, [df, self.X_corr_])
         _ = list(iterable_test)
         assert type(self.thx_excl) == float, "thx_excl has to be dtype float"
 
         df_corr_long = (
-            self.X_corr.melt(ignore_index=False,
-                             var_name="col_name").reset_index().rename(
-                                 columns={"index": "row_name"}
-                             )
+            self.X_corr_.melt(ignore_index = False, var_name = "col_name").
+            reset_index().
+            rename(columns = {"index":"row_name"})
         )
-        df_above_thx = df_corr_long[df_corr_long["value"] > self.thx_excl
-                                    ].sort_values("value", ascending=False)
-        feats_drop = df_above_thx[["row_name", "col_name"]].max(axis=1)
-        df_constrained = pd.DataFrame(df).drop(columns=feats_drop)
-        return df_constrained
+        df_above_thx = df_corr_long[df_corr_long["value"] > self.thx_excl].sort_values("value", ascending = False)
+        feats_drop_idx = np.unique(df_above_thx[["row_name", "col_name"]].max(axis = 1).reset_index(drop = True))
+        feats_keep_idx = [c for c in range(0, self.X_corr_.shape[1]) if c not in feats_drop_idx]
+        return feats_drop_idx, feats_keep_idx
